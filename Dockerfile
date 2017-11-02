@@ -127,6 +127,8 @@ RUN for triple in $(echo ${LINUX_TRIPLES} | tr "," " "); do                     
 # we need to use default clang binary to avoid a bug in osxcross that recursively call himself
 # with more and more parameters
 
+# Urho3D dependencies
+RUN apt-get install -y libasound2-dev libxrandr-dev libgl1-mesa-dev libglu1-mesa-dev
 
 # Image metadata
 ENTRYPOINT ["/usr/bin/crossbuild"]
