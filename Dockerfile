@@ -1,11 +1,9 @@
-FROM buildpack-deps:jessie-curl
+FROM buildpack-deps:stretch-curl
 MAINTAINER Manfred Touron <m@42.am> (https://github.com/moul)
 
 # Install deps
 RUN set -x; \
-    echo deb http://emdebian.org/tools/debian/ jessie main > /etc/apt/sources.list.d/emdebian.list \
- && curl -sL http://emdebian.org/tools/debian/emdebian-toolchain-archive.key | apt-key add - \
- && dpkg --add-architecture arm64                      \
+    dpkg --add-architecture arm64                      \
  && dpkg --add-architecture armel                      \
  && dpkg --add-architecture armhf                      \
  && dpkg --add-architecture i386                       \
@@ -38,13 +36,14 @@ RUN set -x; \
         mercurial                                      \
         multistrap                                     \
         patch                                          \
-        python-software-properties                     \
+        python3-software-properties                    \
         software-properties-common                     \
         subversion                                     \
         wget                                           \
         xz-utils                                       \
         cmake                                          \
         qemu-user-static                               \
+        ninja-build                                    \
  && apt-get clean
 # FIXME: install gcc-multilib
 # FIXME: add mips and powerpc architectures
@@ -59,7 +58,7 @@ RUN apt-get install -y mingw-w64 \
 
 #Build arguments
 ARG osxcross_repo="tpoechtrager/osxcross"
-ARG osxcross_revision="a845375e028d29b447439b0c65dea4a9b4d2b2f6"
+ARG osxcross_revision="1a1733a773fe26e7b6c93b16fbf9341f22fac831"
 ARG darwin_sdk_version="10.10"
 ARG darwin_osx_version_min="10.6"
 ARG darwin_version="14"
@@ -71,7 +70,8 @@ ENV OSXCROSS_REPO="${osxcross_repo}"                   \
     DARWIN_SDK_VERSION="${darwin_sdk_version}"         \
     DARWIN_VERSION="${darwin_version}"                 \
     DARWIN_OSX_VERSION_MIN="${darwin_osx_version_min}" \
-    DARWIN_SDK_URL="${darwin_sdk_url}"
+    DARWIN_SDK_URL="${darwin_sdk_url}"                 \
+    CROSSBUILD=1
 
 RUN mkdir -p "/tmp/osxcross"                                                                                   \
  && cd "/tmp/osxcross"                                                                                         \
@@ -98,8 +98,9 @@ ENV LINUX_TRIPLES=arm-linux-gnueabi,arm-linux-gnueabihf,aarch64-linux-gnu,mipsel
 COPY ./assets/osxcross-wrapper /usr/bin/osxcross-wrapper
 RUN for triple in $(echo ${LINUX_TRIPLES} | tr "," " "); do                                       \
       for bin in /etc/alternatives/$triple-* /usr/bin/$triple-*; do                               \
-        if [ ! -f /usr/$triple/bin/$(basename $bin | sed "s/$triple-//") ]; then                  \
-          ln -s $bin /usr/$triple/bin/$(basename $bin | sed "s/$triple-//");                      \
+        dest=/usr/$triple/bin/$(basename $bin | sed "s/$triple-//");                              \
+        if [ ! -f "$dest" ]; then                                                                 \
+          ln -s $bin "$dest";                                                                     \
         fi;                                                                                       \
       done;                                                                                       \
     done &&                                                                                       \
@@ -110,17 +111,18 @@ RUN for triple in $(echo ${LINUX_TRIPLES} | tr "," " "); do                     
       done &&                                                                                     \
       rm -f /usr/$triple/bin/clang*;                                                              \
       ln -s cc /usr/$triple/bin/gcc;                                                              \
-      ln -s /usr/osxcross/SDK/MacOSX${DARWIN_SDK_VERSION}.sdk/usr /usr/x86_64-linux-gnu/$triple;  \
+      ln -s /usr/osxcross/SDK/MacOSX${DARWIN_SDK_VERSION}.sdk/usr /usr/$triple;  \
     done;                                                                                         \
     for triple in $(echo ${WINDOWS_TRIPLES} | tr "," " "); do                                     \
       mkdir -p /usr/$triple/bin;                                                                  \
       for bin in /etc/alternatives/$triple-* /usr/bin/$triple-*; do                               \
-        if [ ! -f /usr/$triple/bin/$(basename $bin | sed "s/$triple-//") ]; then                  \
-          ln -s $bin /usr/$triple/bin/$(basename $bin | sed "s/$triple-//");                      \
+        dest=/usr/$triple/bin/$(basename $bin | sed "s/$triple-//");                              \
+        if [ ! -f $dest ]; then                                                                   \
+          ln -s $bin $dest;                                                                       \
         fi;                                                                                       \
       done;                                                                                       \
       ln -s gcc /usr/$triple/bin/cc;                                                              \
-      ln -s /usr/$triple /usr/x86_64-linux-gnu/$triple;                                           \
+      ln -s /usr/$triple /usr/$triple;                                           \
     done
 # we need to use default clang binary to avoid a bug in osxcross that recursively call himself
 # with more and more parameters
